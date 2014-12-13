@@ -14,6 +14,36 @@ import           Data.Maybe
 import           Data.Ord (comparing)
 import           Language.Haskell.TH
 import           Language.Haskell.TH.ReifyMany (reifyMany)
+import           Language.Haskell.TH.Syntax (addTopDecls)
+
+-- Sadly, this doesn't work due to
+--
+--   Only function, value, and foreign import declarations may be
+--   added with addTopDecl
+--
+-- Which seems to be a rather arbitrary limitation...
+--
+-- TODO: Send an email to haskell-cafe about this?
+
+-- explainInstance :: Q Type -> Q Exp
+-- explainInstance qty = do
+--     ty <- qty
+--     case unAppsT ty of
+--         (ConT clazz : tys) -> do
+--             (decs, methodMap) <- instanceResolvers [clazz]
+--             addTopDecls decs
+--             [| putStrLn (displayInst $(return (invokeResolve methodMap clazz tys))) |]
+--         _ -> fail "explainInstance input should be a constraint"
+
+explainInstance :: Q Type -> Q [Dec]
+explainInstance qty = do
+    ty <- qty
+    case unAppsT ty of
+        (ConT clazz : tys) -> do
+            (decs, methodMap) <- instanceResolvers [clazz]
+            decs' <- [d| main = putStrLn (displayInst $(return (invokeResolve methodMap clazz tys))) |]
+            return (decs ++ decs')
+        _ -> fail "explainInstance input should be a constraint"
 
 -- TODO:
 --
@@ -36,7 +66,7 @@ displayInst = go 0
         "\n" ++ unlines (map (("       " ++) . displayVar) vars)
     displayVar (n, ty) = n ++ " ~ " ++ show ty
 
-instanceResolvers :: [Name] -> Q [Dec]
+instanceResolvers :: [Name] -> Q ([Dec], M.Map Name Name)
 instanceResolvers initial = do
     infos <- reifyMany recurse initial
     methodMap <- M.fromList <$> sequence
@@ -48,7 +78,7 @@ instanceResolvers initial = do
         | (n, _) <- infos
         ]
     decs <- mapM (resolver methodMap) $ concatMap (infoToDecs . snd) infos
-    return $ map (applySubst (flip M.lookup renameMap)) decs
+    return (map (applySubst (flip M.lookup renameMap)) decs, methodMap)
   where
     recurse :: (Name, Info) -> Q (Bool, [Name])
     recurse (name, info) = return $ do
@@ -74,10 +104,6 @@ instanceResolvers initial = do
     instNames (InstanceD cxt ty decs) =
         allNames cxt ++ allNames ty ++ allNames (filter isFamilyDec decs)
     instNames _ = []
-    lookupMethod :: M.Map Name Name -> Name -> Name
-    lookupMethod methodMap name =
-        fromMaybe (error ("Couldn't find method name for " ++ show name))
-                  (M.lookup name methodMap)
     resolver :: M.Map Name Name -> Dec -> Q Dec
     resolver methodMap (ClassD cxt name tvs fds decs) = do
         let method = lookupMethod methodMap name
@@ -102,8 +128,7 @@ instanceResolvers initial = do
                     ]
                 , ListE $ flip mapMaybe cxt $ \case
                     EqualP {} -> Nothing
-                    ClassP n tys -> Just $ appsE' $
-                        VarE (lookupMethod methodMap n) : map proxyE tys
+                    ClassP n tys -> Just (invokeResolve methodMap n tys)
                 ]
             -- Need extra typeable instances for typeRep use.
             extraCxt = map (ClassP ''Typeable . (: []) . VarT . fst) substs
@@ -111,6 +136,15 @@ instanceResolvers initial = do
             filter isFamilyDec decs ++
             [FunD method [Clause (map (\_ -> WildP) tvs) (NormalB expr) []]]
     resolver _ dec = return dec
+
+invokeResolve :: M.Map Name Name -> Name -> [Type] -> Exp
+invokeResolve methodMap name tys =
+    appsE' $ VarE (lookupMethod methodMap name) : map proxyE tys
+
+lookupMethod :: M.Map Name Name -> Name -> Name
+lookupMethod methodMap name =
+    fromMaybe (error ("Couldn't find method name for " ++ show name))
+              (M.lookup name methodMap)
 
 allNames :: Data a => a -> [Name]
 allNames = listify (\_ -> True)

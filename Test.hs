@@ -5,11 +5,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PolyKinds #-}
 
+-- NOTE: doesn't yet work due to issues with TH and PolyKinds
+
 module Test where
 
-import Data.Proxy
 import ExplainInstances
 
-$(instanceResolvers [''Ord])
-
-main = print (resolveOrd (Proxy :: Proxy [Maybe Int]))
+$(explainInstance [t| Ord [Maybe Int] |])
