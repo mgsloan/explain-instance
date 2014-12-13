@@ -1,13 +1,17 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 
 module ExplainInstances where
 
-import           Control.Applicative ((<$>))
+import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad (filterM)
+import           Data.Function (on)
 import           Data.Generics
+import           Data.List (groupBy, sortBy, sort, group)
 import qualified Data.Map as M
 import           Data.Maybe
+import           Data.Ord (comparing)
 import           Language.Haskell.TH
 import           Language.Haskell.TH.ReifyMany (reifyMany)
 
@@ -31,8 +35,8 @@ instanceResolvers initial = do
         [ (n, ) <$> chooseUnusedName (nameBase n)
         | (n, _) <- infos
         ]
-    return $ map (applySubstitution (`M.lookup` renameMap) . resolver methodMap) $
-        concatMap (infoToDecs . snd) infos
+    decs <- mapM (resolver methodMap) $ concatMap (infoToDecs . snd) infos
+    return $ map (applySubst (flip M.lookup renameMap)) decs
   where
     recurse :: (Name, Info) -> Q (Bool, [Name])
     recurse (name, info) = return $ do
@@ -62,33 +66,32 @@ instanceResolvers initial = do
     lookupMethod methodMap name =
         fromMaybe (error ("Couldn't find method name for " ++ show name))
                   (M.lookup name methodMap)
-    resolver :: M.Map Name Name -> Dec -> Dec
-    resolver methodMap (ClassD cxt name tvs fds decs) =
-        ClassD cxt name tvs fds $
+    resolver :: M.Map Name Name -> Dec -> Q Dec
+    resolver methodMap (ClassD cxt name tvs fds decs) = do
+        let method = lookupMethod methodMap name
+            ty = funT $
+                map (AppT (ConT ''Proxy) . VarT . tvName) tvs ++
+                [ConT ''Inst]
+        return $ ClassD cxt name tvs fds $
             filter isFamilyDec decs ++
             [SigD method ty]
-      where
-        method = lookupMethod methodMap name
-        ty = funT $
-            map (AppT (ConT ''Proxy) . VarT . tvName) tvs ++
-            [ConT ''Inst]
-    resolver methodMap (InstanceD cxt ty decs) =
-        InstanceD cxt ty $
+    resolver methodMap (InstanceD cxt ty decs) = do
+        let cleanTyVars = applySubstMap (tyVarSubsts (cxt, ty))
+        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cxt ty []
+        let (ConT clazzName : tvs) = unAppsT ty
+            method = lookupMethod methodMap clazzName
+            expr = appsE'
+                [ ConE 'Inst
+                , LitE $ StringL $ pprint cleanedHead
+                , ListE $ flip mapMaybe cxt $ \case
+                    EqualP {} -> Nothing
+                    ClassP n tys -> Just $ appsE' $
+                        VarE (lookupMethod methodMap n) : map proxyE tys
+                ]
+        return $ InstanceD cxt ty $
             filter isFamilyDec decs ++
             [FunD method [Clause (map (\_ -> WildP) tvs) (NormalB expr) []]]
-      where
-        (ConT clazzName : tvs) = unAppsT ty
-        method = lookupMethod methodMap clazzName
-        expr = appsE'
-            [ConE 'Inst, instHead, ListE (mapMaybe recursor cxt)]
-        -- FIXME: add the substituted type info back in
-        -- (use freeVarsT to generate Typeable instances for the free vars)
-        -- instHead = AppE (VarE 'typeRep) (proxyE ty)
-        instHead = LitE $ StringL $ pprint (InstanceD cxt ty [])
-        recursor (ClassP n tys) = Just $ appsE' $
-            VarE (lookupMethod methodMap n) : map proxyE tys
-        recursor EqualP {} = Nothing
-    resolver _ dec = dec
+    resolver _ dec = return dec
 
 allNames :: Data a => a -> [Name]
 allNames = listify (\_ -> True)
@@ -124,8 +127,9 @@ chooseUnusedName name = do
     Just str <- findM (\str -> not <$> exists str) choices
     return (mkName str)
   where
-    choices = map (name ++) $ "" : "_" : map ('_':) (map show [0..])
-    exists str = do
+    choices = map (name ++) $ "" : "_" : map ('_':) (map show [1..])
+    -- 'recover' is used to handle errors due to ambiguous identifier names.
+    exists str = recover (return True) $ do
         mtype <- lookupTypeName str
         mvalue <- lookupValueName str
         return $ isJust mtype || isJust mvalue
@@ -137,8 +141,11 @@ findM f (x:xs) = do
         then return (Just x)
         else findM f xs
 
-applySubstitution :: (Data a, Typeable b) => (b -> Maybe b) -> a -> a
-applySubstitution f = everywhere (id `extT` (\x -> fromMaybe x (f x)))
+applySubst :: (Data a, Typeable b) => (b -> Maybe b) -> a -> a
+applySubst f = everywhere (id `extT` (\x -> fromMaybe x (f x)))
+
+applySubstMap :: (Data a, Ord b, Typeable b) => M.Map b b -> a -> a
+applySubstMap m = applySubst (flip M.lookup m)
 
 funT :: [Type] -> Type
 funT [x] = x
@@ -165,3 +172,43 @@ freeVarsT (AppT l r) = freeVarsT l ++ freeVarsT r
 freeVarsT (SigT ty k) = freeVarsT ty ++ freeVarsT k
 freeVarsT (VarT n) = [n]
 freeVarsT _ = []
+
+-- Dequalify names which are unambiguous.
+cleanTyCons :: Data a => a -> Q a
+cleanTyCons = everywhereM (return `extM` subst1 `extM` subst2)
+  where
+    rename :: Name -> Q Name
+    rename n = do
+        inScope <- typeNameInScope n
+        return $ if inScope then mkName (nameBase n) else n
+    subst1 (ConT n) = ConT <$> rename n
+    subst1 x = return x
+    subst2 (ClassP n tys) = ClassP <$> rename n <*> return tys
+    subst2 x = return x
+
+typeNameInScope :: Name -> Q Bool
+typeNameInScope n =
+    recover (return False)
+            ((Just n ==) <$> lookupTypeName (nameBase n))
+
+-- Chooses prettier names for type variables.  Assumes that all type
+-- variable names are unique.
+tyVarSubsts :: Data a => a -> M.Map Name Name
+tyVarSubsts input =
+    M.fromList $
+    concatMap addSuffixes $
+    groupSortOn nameBase $
+    sortNub [n | VarT n <- tyVars]
+  where
+    addSuffixes =
+        zipWith (\s x -> (x, mkName (nameBase x ++ s))) ("" : map show [1..])
+    tyVars = listify isVarT input
+    isVarT :: Type -> Bool
+    isVarT (VarT _) = True
+    isVarT _ = False
+
+groupSortOn :: Ord b => (a -> b) -> [a] -> [[a]]
+groupSortOn f = groupBy ((==) `on` f) . sortBy (comparing f)
+
+sortNub :: Ord a => [a] -> [a]
+sortNub = map head . group . sort
