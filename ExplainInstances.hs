@@ -64,7 +64,7 @@ displayInst = go 0
     displayVars (var0 : vars) =
         "\n  with " ++ displayVar var0 ++
         "\n" ++ unlines (map (("       " ++) . displayVar) vars)
-    displayVar (n, ty) = n ++ " ~ " ++ show ty
+    displayVar (n, ty) = n ++ " ~ " ++ showsPrec 9 ty ""
 
 instanceResolvers :: [Name] -> Q ([Dec], M.Map Name Name)
 instanceResolvers initial = do
