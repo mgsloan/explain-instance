@@ -21,8 +21,20 @@ import           Language.Haskell.TH.ReifyMany (reifyMany)
 --
 -- * Show info about type families by using Typeable
 
-data Inst = Inst String [Inst]
+data Inst = Inst String [(String, TypeRep)] [Inst]
     deriving (Show)
+
+displayInst :: Inst -> String
+displayInst = go 0
+  where
+    go i (Inst decl vars cxt) =
+        addIndent i (decl ++ displayVars vars) ++
+        concatMap (("\n" ++) . go (i + 2)) cxt
+    displayVars [] = ""
+    displayVars (var0 : vars) =
+        "\n  with " ++ displayVar var0 ++
+        "\n" ++ unlines (map (("       " ++) . displayVar) vars)
+    displayVar (n, ty) = n ++ " ~ " ++ show ty
 
 instanceResolvers :: [Name] -> Q [Dec]
 instanceResolvers initial = do
@@ -76,19 +88,26 @@ instanceResolvers initial = do
             filter isFamilyDec decs ++
             [SigD method ty]
     resolver methodMap (InstanceD cxt ty decs) = do
-        let cleanTyVars = applySubstMap (tyVarSubsts (cxt, ty))
+        let substs = varTSubsts (cxt, ty)
+            cleanTyVars = applySubstMap (M.fromList substs)
         cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cxt ty []
         let (ConT clazzName : tvs) = unAppsT ty
             method = lookupMethod methodMap clazzName
             expr = appsE'
                 [ ConE 'Inst
                 , LitE $ StringL $ pprint cleanedHead
+                , ListE $ flip map substs $ \(ty, cty) -> TupE
+                    [ LitE (StringL (pprint cty))
+                    , AppE (VarE 'typeRep) (proxyE (VarT ty))
+                    ]
                 , ListE $ flip mapMaybe cxt $ \case
                     EqualP {} -> Nothing
                     ClassP n tys -> Just $ appsE' $
                         VarE (lookupMethod methodMap n) : map proxyE tys
                 ]
-        return $ InstanceD cxt ty $
+            -- Need extra typeable instances for typeRep use.
+            extraCxt = map (ClassP ''Typeable . (: []) . VarT . fst) substs
+        return $ InstanceD (cxt ++ extraCxt) ty $
             filter isFamilyDec decs ++
             [FunD method [Clause (map (\_ -> WildP) tvs) (NormalB expr) []]]
     resolver _ dec = return dec
@@ -193,22 +212,20 @@ typeNameInScope n =
 
 -- Chooses prettier names for type variables.  Assumes that all type
 -- variable names are unique.
-tyVarSubsts :: Data a => a -> M.Map Name Name
-tyVarSubsts input =
-    M.fromList $
-    concatMap addSuffixes $
-    groupSortOn nameBase $
-    sortNub [n | VarT n <- tyVars]
+varTSubsts :: Data a => a -> [(Name, Name)]
+varTSubsts =
+    concatMap munge . groupSortOn nameBase . sortNub . varTNames
   where
-    addSuffixes =
-        zipWith (\s x -> (x, mkName (nameBase x ++ s))) ("" : map show [1..])
-    tyVars = listify isVarT input
-    isVarT :: Type -> Bool
-    isVarT (VarT _) = True
-    isVarT _ = False
+    munge = zipWith (\s x -> (x, mkName (nameBase x ++ s))) ("" : map show [1..])
+
+varTNames :: Data a => a -> [Name]
+varTNames x = [n | VarT n <- listify (\_ -> True) x]
 
 groupSortOn :: Ord b => (a -> b) -> [a] -> [[a]]
 groupSortOn f = groupBy ((==) `on` f) . sortBy (comparing f)
 
 sortNub :: Ord a => [a] -> [a]
 sortNub = map head . group . sort
+
+addIndent :: Int -> String -> String
+addIndent cnt = unlines . map (replicate cnt ' ' ++) . lines
