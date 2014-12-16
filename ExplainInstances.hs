@@ -16,40 +16,51 @@ import           Language.Haskell.TH
 import           Language.Haskell.TH.ReifyMany (reifyMany)
 import           Language.Haskell.TH.Syntax (addTopDecls)
 
--- Sadly, this doesn't work due to
+-- TODO:
+--
+-- * Show info about type families by using Typeable
+--
+-- * Omit declarations involving constraints with the wrong arity, as
+-- this is indicative of the PolyKinds issue
+--
+-- * Use a parser so that type vars can be provided.  Or, have a
+-- wildcard datatype.
+
+
+-- Issues due to TH limitations:
+--
+-- * No ConstraintKinds
+--
+-- * No PolyKinds
+--
+-- * No info about whether an instance is overlapping / incoherent
+--   (TODO: is this truly an issue?)
+--
+-- * No GHCI support. This is because 'explainInstances' can't yield
+-- an Exp, as:
 --
 --   Only function, value, and foreign import declarations may be
 --   added with addTopDecl
 --
 -- Which seems to be a rather arbitrary limitation...
 --
--- TODO: Send an email to haskell-cafe about this?
-
--- explainInstance :: Q Type -> Q Exp
--- explainInstance qty = do
---     ty <- qty
---     case unAppsT ty of
---         (ConT clazz : tys) -> do
---             (decs, methodMap) <- instanceResolvers [clazz]
---             addTopDecls decs
---             [| putStrLn (displayInst $(return (invokeResolve methodMap clazz tys))) |]
---         _ -> fail "explainInstance input should be a constraint"
+-- TODO: Followup on these limitations on trac / mailinglists
 
 explainInstance :: Q Type -> Q [Dec]
-explainInstance qty = do
+explainInstance = explainInstance' False
+
+explainInstanceError :: Q Type -> Q [Dec]
+explainInstanceError = explainInstance' True
+
+explainInstance' :: Bool -> Q Type -> Q [Dec]
+explainInstance' addErrorInstance qty = do
     ty <- qty
     case unAppsT ty of
         (ConT clazz : tys) -> do
-            (decs, methodMap) <- instanceResolvers [clazz]
+            (decs, methodMap) <- instanceResolvers addErrorInstance [clazz]
             decs' <- [d| main = putStrLn (displayInst $(return (invokeResolve methodMap clazz tys))) |]
             return (decs ++ decs')
         _ -> fail "explainInstance input should be a constraint"
-
--- TODO:
---
--- * Handle ConstraintKinds
---
--- * Show info about type families by using Typeable
 
 data Inst = Inst String [(String, TypeRep)] [Inst]
     deriving (Show)
@@ -66,8 +77,8 @@ displayInst = go 0
         "\n" ++ unlines (map (("       " ++) . displayVar) vars)
     displayVar (n, ty) = n ++ " ~ " ++ showsPrec 9 ty ""
 
-instanceResolvers :: [Name] -> Q ([Dec], M.Map Name Name)
-instanceResolvers initial = do
+instanceResolvers :: Bool -> [Name] -> Q ([Dec], M.Map Name Name)
+instanceResolvers addErrorInstance initial = do
     infos <- reifyMany recurse initial
     methodMap <- M.fromList <$> sequence
         [ (n, ) <$> chooseUnusedName ("resolve" ++ nameBase n)
@@ -77,9 +88,11 @@ instanceResolvers initial = do
         [ (n, ) <$> chooseUnusedName (nameBase n)
         | (n, _) <- infos
         ]
-    decs <- mapM (resolver methodMap) $ concatMap (infoToDecs . snd) infos
+    decs <- mapM (resolver methodMap) (concatMap (infoToDecs . snd) infos)
     return (map (applySubst (flip M.lookup renameMap)) decs, methodMap)
   where
+    -- Recursively enumerate all of the top level declarations which
+    -- need to be copied / renamed.
     recurse :: (Name, Info) -> Q (Bool, [Name])
     recurse (name, info) = return $ do
         case info of
@@ -104,35 +117,61 @@ instanceResolvers initial = do
     instNames (InstanceD cxt ty decs) =
         allNames cxt ++ allNames ty ++ allNames (filter isFamilyDec decs)
     instNames _ = []
+    infoToDecs :: Info -> [Dec]
+    -- TODO: check fundeps?
+    infoToDecs (ClassI dec@(ClassD _ name tvs _ _) insts) =
+        case addErrorInstance of
+          False -> dec : insts
+          True -> dec : errInst : insts
+            where
+              errInst = InstanceD []
+                                  (appsT $ ConT name : map (VarT . tvName) tvs)
+                                  errorInstanceDecs
+    infoToDecs (ClassI _ _) = error "impossible: ClassI which doesn't contain ClassD"
+    infoToDecs (TyConI dec) = [dec]
+    infoToDecs (FamilyI dec insts) = dec : insts
+    infoToDecs (VarI _name _ty mdec _fixity) = maybeToList mdec
+    infoToDecs ClassOpI {} = []
+    infoToDecs PrimTyConI {} = []
+    infoToDecs DataConI {} = []
+    infoToDecs TyVarI {} = []
+    errorInstanceDecs = [FunD (mkName "x") []]
+    -- Modify a class or instance to instead just have a single
+    -- "resolver*" function.
     resolver :: M.Map Name Name -> Dec -> Q Dec
     resolver methodMap (ClassD cxt name tvs fds decs) = do
         let method = lookupMethod methodMap name
             ty = funT $
                 map (AppT (ConT ''Proxy) . VarT . tvName) tvs ++
                 [ConT ''Inst]
-        return $ ClassD cxt name tvs fds $
+        cxt' <- mapM trimConstraint cxt
+        return $ ClassD cxt' name tvs fds $
             filter isFamilyDec decs ++
             [SigD method ty]
     resolver methodMap (InstanceD cxt ty decs) = do
         let substs = varTSubsts (cxt, ty)
             cleanTyVars = applySubstMap (M.fromList substs)
         cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cxt ty []
+        cxt' <- mapM trimConstraint cxt
         let (ConT clazzName : tvs) = unAppsT ty
             method = lookupMethod methodMap clazzName
+            msg = case addErrorInstance of
+                True | decs == errorInstanceDecs -> "ERROR " ++ pprint cleanedHead
+                _ -> pprint cleanedHead
             expr = appsE'
                 [ ConE 'Inst
-                , LitE $ StringL $ pprint cleanedHead
+                , LitE $ StringL msg
                 , ListE $ flip map substs $ \(ty, cty) -> TupE
                     [ LitE (StringL (pprint cty))
                     , AppE (VarE 'typeRep) (proxyE (VarT ty))
                     ]
-                , ListE $ flip mapMaybe cxt $ \case
+                , ListE $ flip mapMaybe cxt' $ \case
                     EqualP {} -> Nothing
                     ClassP n tys -> Just (invokeResolve methodMap n tys)
                 ]
-            -- Need extra typeable instances for typeRep use.
+            -- Need extra typeable constraints in order to use typeRep.
             extraCxt = map (ClassP ''Typeable . (: []) . VarT . fst) substs
-        return $ InstanceD (cxt ++ extraCxt) ty $
+        return $ InstanceD (cxt' ++ extraCxt) ty $
             filter isFamilyDec decs ++
             [FunD method [Clause (map (\_ -> WildP) tvs) (NormalB expr) []]]
     resolver _ dec = return dec
@@ -143,7 +182,7 @@ invokeResolve methodMap name tys =
 
 lookupMethod :: M.Map Name Name -> Name -> Name
 lookupMethod methodMap name =
-    fromMaybe (error ("Couldn't find method name for " ++ show name))
+    fromMaybe (error ("Couldn't find resolve* method name for " ++ show name))
               (M.lookup name methodMap)
 
 allNames :: Data a => a -> [Name]
@@ -164,15 +203,13 @@ isFamilyDec TySynInstD {} = True
 isFamilyDec ClosedTypeFamilyD {} = True
 isFamilyDec _ = False
 
-infoToDecs :: Info -> [Dec]
-infoToDecs (ClassI dec insts) = dec : insts
-infoToDecs (TyConI dec) = [dec]
-infoToDecs (FamilyI dec insts) = dec : insts
-infoToDecs (VarI _name _ty mdec _fixity) = maybeToList mdec
-infoToDecs ClassOpI {} = []
-infoToDecs PrimTyConI {} = []
-infoToDecs DataConI {} = []
-infoToDecs TyVarI {} = []
+-- Work around a TH bug where PolyKinded constraints get too many
+-- arguments.
+trimConstraint :: Pred -> Q Pred
+trimConstraint (ClassP n tys) = do
+    ClassI (ClassD _ _ tvs _ _) _ <- reify n
+    return $ ClassP n (drop (length tys - length tvs) tys)
+trimConstraint x = return x
 
 chooseUnusedName :: String -> Q Name
 chooseUnusedName name = do
@@ -204,6 +241,12 @@ funT :: [Type] -> Type
 funT [x] = x
 funT (x:xs) = AppT (AppT ArrowT x) (funT xs)
 
+appsT :: [Type] -> Type
+appsT = go . reverse
+  where
+    go [x] = x
+    go (x:xs) = AppT (go xs) x
+
 unAppsT :: Type -> [Type]
 unAppsT ty = go ty []
   where
@@ -211,7 +254,7 @@ unAppsT ty = go ty []
     go ty = (ty :)
 
 appsE' :: [Exp] -> Exp
-appsE' xs = go (reverse xs)
+appsE' = go . reverse
   where
     go [x] = x
     go (x:xs) = AppE (go xs) x
