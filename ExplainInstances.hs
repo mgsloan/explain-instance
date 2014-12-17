@@ -149,10 +149,10 @@ instanceResolvers addErrorInstance initial = do
             filter isFamilyDec decs ++
             [SigD method ty]
     resolver methodMap (InstanceD cxt ty decs) = do
-        let substs = varTSubsts (cxt, ty)
-            cleanTyVars = applySubstMap (M.fromList substs)
-        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cxt ty []
         cxt' <- mapM trimConstraint cxt
+        let substs = varTSubsts (cxt', ty)
+            cleanTyVars = applySubstMap (M.fromList substs)
+        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cxt' ty []
         let (ConT clazzName : tvs) = unAppsT ty
             method = lookupMethod methodMap clazzName
             msg = case addErrorInstance of
