@@ -26,7 +26,9 @@ import           Language.Haskell.TH.Syntax (addTopDecls)
 --
 -- * Use a parser so that type vars can be provided.  Or, have a
 -- wildcard datatype.
-
+--
+-- * Apply inverse renaming on output types (relevant to constraints
+-- that end up in the types, as well as data types with contexts)
 
 -- Issues due to TH limitations:
 --
@@ -58,9 +60,10 @@ explainInstance' addErrorInstance qty = do
     ty <- qty
     case unAppsT ty of
         (ConT clazz : tys) -> do
-            (decs, methodMap) <- instanceResolvers addErrorInstance [clazz]
-            decs' <- [d| main = putStrLn (displayInst $(return (invokeResolve methodMap clazz tys))) |]
-            return (decs ++ decs')
+            (decs, methodMap, renameMap) <- instanceResolvers addErrorInstance [clazz]
+            let tys' = applySubstMap renameMap tys
+            decs' <- [d| main = putStrLn (displayInst $(return (invokeResolve methodMap clazz tys'))) |]
+            return (decs' ++ decs)
         _ -> fail "explainInstance input should be a constraint"
 
 data Inst = Inst String [(String, TypeRep)] [Inst]
@@ -78,19 +81,18 @@ displayInst = go 0
         "\n" ++ unlines (map (("       " ++) . displayVar) vars)
     displayVar (n, ty) = n ++ " ~ " ++ showsPrec 9 ty ""
 
-instanceResolvers :: Bool -> [Name] -> Q ([Dec], M.Map Name Name)
+instanceResolvers :: Bool -> [Name] -> Q ([Dec], M.Map Name Name, M.Map Name Name)
 instanceResolvers addErrorInstance initial = do
     infos <- reifyMany recurse initial
     methodMap <- M.fromList <$> sequence
         [ (n, ) <$> chooseUnusedName True ("resolve" ++ nameBase n)
         | (n, ClassI {}) <- infos
         ]
-    renameMap <- M.fromList <$> sequence
-        [ (n, ) <$> chooseUnusedName False (nameBase n)
-        | (n, _) <- infos
-        ]
+    let names = map fst infos ++ concatMap (map conName . infoCons . snd) infos
+    renameMap <- M.fromList <$>
+        mapM (\n -> (n, ) <$> chooseUnusedName False (nameBase n)) names
     decs <- mapM (resolver methodMap) (concatMap (infoToDecs . snd) infos)
-    return (map (applySubst (flip M.lookup renameMap)) decs, methodMap)
+    return (map (applySubst (flip M.lookup renameMap)) decs, methodMap, renameMap)
   where
     -- Recursively enumerate all of the top level declarations which
     -- need to be copied / renamed.
@@ -306,6 +308,17 @@ varTSubsts =
 
 varTNames :: Data a => a -> [Name]
 varTNames x = [n | VarT n <- listify (\_ -> True) x]
+
+infoCons :: Info -> [Con]
+infoCons (TyConI (DataD _ _ _ cons _)) = cons
+infoCons (TyConI (NewtypeD _ _ _ con _)) = [con]
+infoCons _ = []
+
+conName :: Con -> Name
+conName (NormalC name _) = name
+conName (RecC name _) = name
+conName (InfixC _ name _) = name
+conName (ForallC _ _ con) = conName con
 
 groupSortOn :: Ord b => (a -> b) -> [a] -> [[a]]
 groupSortOn f = groupBy ((==) `on` f) . sortBy (comparing f)
