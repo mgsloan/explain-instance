@@ -1,6 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module ExplainInstances where
 
@@ -139,20 +140,21 @@ instanceResolvers addErrorInstance initial = do
     -- Modify a class or instance to instead just have a single
     -- "resolver*" function.
     resolver :: M.Map Name Name -> Dec -> Q Dec
-    resolver methodMap (ClassD cxt name tvs fds decs) = do
+    resolver methodMap (ClassD cxt' name tvs fds decs) = do
         let method = lookupMethod methodMap name
             ty = funT $
                 map (AppT (ConT ''Proxy) . VarT . tvName) tvs ++
                 [ConT ''Inst]
-        cxt' <- mapM trimConstraint cxt
-        return $ ClassD cxt' name tvs fds $
+        cxt <- mapM trimConstraint cxt'
+        return $ ClassD cxt name tvs fds $
             filter isFamilyDec decs ++
             [SigD method ty]
-    resolver methodMap (InstanceD cxt ty decs) = do
-        cxt' <- mapM trimConstraint cxt
-        let substs = varTSubsts (cxt', ty)
+    resolver methodMap (InstanceD cxt' ty' decs) = do
+        cxt <- mapM trimConstraint cxt'
+        ty <- trimInstanceType ty'
+        let substs = varTSubsts (cxt, ty)
             cleanTyVars = applySubstMap (M.fromList substs)
-        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cxt' ty []
+        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cxt ty []
         let (ConT clazzName : tvs) = unAppsT ty
             method = lookupMethod methodMap clazzName
             msg = case addErrorInstance of
@@ -165,13 +167,13 @@ instanceResolvers addErrorInstance initial = do
                     [ LitE (StringL (pprint cty))
                     , AppE (VarE 'typeRep) (proxyE (VarT ty))
                     ]
-                , ListE $ flip mapMaybe cxt' $ \case
+                , ListE $ flip mapMaybe cxt $ \case
                     EqualP {} -> Nothing
                     ClassP n tys -> Just (invokeResolve methodMap n tys)
                 ]
             -- Need extra typeable constraints in order to use typeRep.
             extraCxt = map (ClassP ''Typeable . (: []) . VarT . fst) substs
-        return $ InstanceD (cxt' ++ extraCxt) ty $
+        return $ InstanceD (cxt ++ extraCxt) ty $
             filter isFamilyDec decs ++
             [FunD method [Clause (map (\_ -> WildP) tvs) (NormalB expr) []]]
     resolver _ dec = return dec
@@ -210,6 +212,11 @@ trimConstraint (ClassP n tys) = do
     ClassI (ClassD _ _ tvs _ _) _ <- reify n
     return $ ClassP n (drop (length tys - length tvs) tys)
 trimConstraint x = return x
+
+trimInstanceType :: Type -> Q Type
+trimInstanceType (unAppsT -> (ConT n : tys)) = do
+    ClassI (ClassD _ _ tvs _ _) _ <- reify n
+    return $ appsT (ConT n : (drop (length tys - length tvs) tys))
 
 chooseUnusedName :: String -> Q Name
 chooseUnusedName name = do
