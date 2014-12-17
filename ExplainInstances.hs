@@ -82,11 +82,11 @@ instanceResolvers :: Bool -> [Name] -> Q ([Dec], M.Map Name Name)
 instanceResolvers addErrorInstance initial = do
     infos <- reifyMany recurse initial
     methodMap <- M.fromList <$> sequence
-        [ (n, ) <$> chooseUnusedName ("resolve" ++ nameBase n)
+        [ (n, ) <$> chooseUnusedName True ("resolve" ++ nameBase n)
         | (n, ClassI {}) <- infos
         ]
     renameMap <- M.fromList <$> sequence
-        [ (n, ) <$> chooseUnusedName (nameBase n)
+        [ (n, ) <$> chooseUnusedName False (nameBase n)
         | (n, _) <- infos
         ]
     decs <- mapM (resolver methodMap) (concatMap (infoToDecs . snd) infos)
@@ -218,13 +218,15 @@ trimInstanceType (unAppsT -> (ConT n : tys)) = do
     ClassI (ClassD _ _ tvs _ _) _ <- reify n
     return $ appsT (ConT n : (drop (length tys - length tvs) tys))
 
-chooseUnusedName :: String -> Q Name
-chooseUnusedName name = do
+chooseUnusedName :: Bool -> String -> Q Name
+chooseUnusedName allowUnmodified name = do
     -- This will always match, since there can only be finite names.
     Just str <- findM (\str -> not <$> exists str) choices
     return (mkName str)
   where
-    choices = map (name ++) $ "" : "_" : map ('_':) (map show [1..])
+    choices = map (name ++) $
+        (if allowUnmodified then ("" : ) else id) $
+        "_" : map ('_':) (map show [1..])
     -- 'recover' is used to handle errors due to ambiguous identifier names.
     exists str = recover (return True) $ do
         mtype <- lookupTypeName str
