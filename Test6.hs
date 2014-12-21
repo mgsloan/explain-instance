@@ -16,7 +16,7 @@ module Test6 where
 import Data.Typeable
 import Database.Persist
 import Database.Persist.Sql
-import ExplainInstances
+import ExplainInstance
 
 deriving instance Typeable Key
 deriving instance Typeable BackendKey

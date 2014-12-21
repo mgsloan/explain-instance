@@ -10,7 +10,7 @@ module Test5 where
 
 import Data.Monoid
 import Data.Typeable
-import ExplainInstances
+import ExplainInstance
 import Text.Printf
 
 data A = A deriving (Typeable)

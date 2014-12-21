@@ -6,6 +6,6 @@
 
 module Test where
 
-import ExplainInstances
+import ExplainInstance
 
 $(explainInstance [t| Ord [Maybe Int] |])

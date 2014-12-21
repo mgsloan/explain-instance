@@ -3,7 +3,7 @@
 
 module Test2 where
 
-import ExplainInstances
+import ExplainInstance
 
 class Foo a where
 class Bar a where

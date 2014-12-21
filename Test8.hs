@@ -9,7 +9,7 @@
 -- Test of datatype contexts
 module Test8 where
 
-import ExplainInstances
+import ExplainInstance
 
 data Num a => A a = A a
 

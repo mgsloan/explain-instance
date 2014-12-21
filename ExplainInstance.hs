@@ -3,7 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module ExplainInstances where
+module ExplainInstance where
 
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad (filterM)

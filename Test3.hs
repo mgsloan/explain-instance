@@ -4,7 +4,7 @@
 
 module Test3 where
 
-import ExplainInstances
+import ExplainInstance
 import Text.Printf
 
 $(explainInstance [t| PrintfType (Int -> Int -> String) |])

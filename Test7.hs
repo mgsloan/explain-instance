@@ -11,7 +11,7 @@
 module Test7 where
 
 import Data.Typeable
-import ExplainInstances
+import ExplainInstance
 
 import Control.Lens.Internal.Context
 import Control.Lens

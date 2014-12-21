@@ -5,7 +5,7 @@
 -- | Broken test of constraint kinds
 module Test4 where
 
-import ExplainInstances
+import ExplainInstance
 
 type OldNum a = (Eq a, Show a, Num a)
 
