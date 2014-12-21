@@ -9,7 +9,7 @@ import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad (filterM)
 import           Data.Function (on)
 import           Data.Generics
-import           Data.List (groupBy, sortBy, sort, group)
+import           Data.List (groupBy, sortBy, sort, group, find)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Ord (comparing)
@@ -131,13 +131,24 @@ instanceResolvers addErrorInstance initial = do
     infoToDecs :: Info -> [Dec]
     -- TODO: check fundeps?
     infoToDecs (ClassI dec@(ClassD _ name tvs _ _) insts) =
-        case addErrorInstance of
-          False -> dec : insts
-          True -> dec : errInst : insts
-            where
-              errInst = InstanceD []
-                                  (appsT $ ConT name : map (VarT . tvName) tvs)
-                                  errorInstanceDecs
+        case addErrorInstance && not hasDefaultCase of
+            False -> dec : insts
+            True ->
+                let errInst = InstanceD
+                        []
+                        (appsT $ ConT name : map (VarT . tvName) tvs)
+                        errorInstanceDecs
+                in dec : errInst : insts
+      where
+        -- If true then an overlapping instance like (Class v1 ..),
+        -- where all arguments are type variables, already exists.
+        -- In this case omit the error instance.
+        hasDefaultCase = isJust $ find isDefaultCase insts
+        isDefaultCase (InstanceD _ (unAppsT -> (_:tys)) _) =
+            all isTyVar tys
+        isDefaultCase _ = False
+        isTyVar (VarT _) = True
+        isTyVar _ = False
     infoToDecs (ClassI _ _) = error "impossible: ClassI which doesn't contain ClassD"
     infoToDecs (TyConI dec) = [dec]
     infoToDecs (FamilyI dec insts) = dec : insts
