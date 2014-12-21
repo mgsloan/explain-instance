@@ -19,10 +19,9 @@ import           Language.Haskell.TH.Syntax (addTopDecls)
 
 -- TODO:
 --
--- * Show info about type families by using Typeable
+-- * Rename to "explain-instance"
 --
--- * Omit declarations involving constraints with the wrong arity, as
--- this is indicative of the PolyKinds issue
+-- * Show info about type families by using Typeable
 --
 -- * Use a parser so that type vars can be provided.  Or, have a
 -- wildcard datatype.
@@ -66,9 +65,18 @@ explainInstance' addErrorInstance qty = do
             return (decs' ++ decs)
         _ -> fail "explainInstance input should be a constraint"
 
-data Inst = Inst String [(String, TypeRep)] [Inst]
+-- | An explanation of why some constraint is satisfied.
+data Inst = Inst
+    { -- | Like an instance declaration, but without the declarations.
+      instHead :: String
+      -- | Describes how type variables are instantiated in the head.
+    , instTypes :: [(String, TypeRep)]
+      -- | Explanations of how the instance's constraints are satisfied.
+    , instConstraints :: [Inst]
+    }
     deriving (Show)
 
+-- | Provides an indented string presentation of the instance resolution tree.
 displayInst :: Inst -> String
 displayInst = go 0
   where
