@@ -67,7 +67,7 @@ explainInstance' addErrorInstance qty = do
 
 -- | An explanation of why some constraint is satisfied.
 data Inst = Inst
-    { -- | Like an instance declaration, but without the declarations.
+    { -- | Text of an instance declaration, but without the method declarations.
       instHead :: String
       -- | Describes how type variables are instantiated in the head.
     , instTypes :: [(String, TypeRep)]

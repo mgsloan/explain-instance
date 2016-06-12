@@ -1,0 +1,60 @@
+-- This file has been generated from package.yaml by hpack version 0.14.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           explain-instance
+version:        0.1.0
+synopsis:       Clever TH hack to explain type constraints
+homepage:       https://github.com/mgsloan/explain-instance#readme
+bug-reports:    https://github.com/mgsloan/explain-instance/issues
+maintainer:     Michael Sloan <mgsloan@gmail.com>
+license:        MIT
+build-type:     Simple
+cabal-version:  >= 1.10
+
+source-repository head
+  type: git
+  location: https://github.com/mgsloan/explain-instance
+
+library
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
+  build-depends:
+      base >=4.7 && < 5
+    , containers
+    , lens
+    , persistent
+    , syb
+    , template-haskell
+    , th-reify-many
+  exposed-modules:
+      ExplainInstance
+  default-language: Haskell2010
+
+test-suite explain-instance-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
+  build-depends:
+      base >=4.7 && < 5
+    , containers
+    , lens
+    , persistent
+    , syb
+    , template-haskell
+    , th-reify-many
+  other-modules:
+      Test
+      Test10
+      Test2
+      Test3
+      Test4
+      Test5
+      Test6
+      Test7
+      Test8
+      Test9
+  default-language: Haskell2010

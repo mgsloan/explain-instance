@@ -2,8 +2,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
--- | Broken test of constraint kinds
 module Test4 where
+
+{- FIXME: Currently broken test of constraint kinds
 
 import ExplainInstance
 
@@ -18,3 +19,5 @@ instance OldNum a => Bar (Maybe a) where
 -- https://ghc.haskell.org/trac/ghc/ticket/7021
 
 $(explainInstance [t| Bar (Maybe Int) |])
+
+-}

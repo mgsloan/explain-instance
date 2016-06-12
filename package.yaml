@@ -1,0 +1,26 @@
+name: explain-instance
+version: 0.1.0
+synopsis: Clever TH hack to explain type constraints
+maintainer: Michael Sloan <mgsloan@gmail.com>
+license: MIT
+github: mgsloan/explain-instance
+
+ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
+
+dependencies:
+  - base >=4.7 && < 5
+  - containers
+  - lens
+  - persistent
+  - syb
+  - template-haskell
+  - th-reify-many
+
+library:
+  source-dirs: src
+
+tests:
+  explain-instance-test:
+    source-dirs:
+      - test
+    main: Spec.hs

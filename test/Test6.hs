@@ -9,9 +9,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
---FIXME: Currently broken
-
 module Test6 where
+
+{- FIXME: Currently broken
 
 import Data.Typeable
 import Database.Persist
@@ -22,3 +22,5 @@ deriving instance Typeable Key
 deriving instance Typeable BackendKey
 
 $(explainInstance [t| PersistQuery SqlBackend |])
+
+-}
