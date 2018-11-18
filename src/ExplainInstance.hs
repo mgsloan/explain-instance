@@ -19,8 +19,6 @@ import           Language.Haskell.TH.Syntax (addTopDecls)
 
 -- TODO:
 --
--- * Rename to "explain-instance"
---
 -- * Show info about type families by using Typeable
 --
 -- * Use a parser so that type vars can be provided.  Or, have a
@@ -36,17 +34,9 @@ import           Language.Haskell.TH.Syntax (addTopDecls)
 -- * No PolyKinds
 --
 -- * No info about whether an instance is overlapping / incoherent
---   (TODO: is this truly an issue?)
 --
--- * No GHCI support. This is because 'explainInstances' can't yield
--- an Exp, as:
---
---   Only function, value, and foreign import declarations may be
---   added with addTopDecl
---
--- Which seems to be a rather arbitrary limitation...
---
--- TODO: Followup on these limitations on trac / mailinglists
+-- * No direct GHCI support. This is because 'explainInstances' can't
+-- yield an Exp, as 'addTopDecl' cannot create instances / typeclasses.
 
 explainInstance :: Q Type -> Q [Dec]
 explainInstance = explainInstance' False
