@@ -1,6 +1,10 @@
--- This file has been generated from package.yaml by hpack version 0.14.0.
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
 --
 -- see: https://github.com/sol/hpack
+--
+-- hash: 4f5bc65f8c684803d962398d7faf6009b13b37bc14b2887377dfc25670faa271
 
 name:           explain-instance
 version:        0.1.0
@@ -10,7 +14,6 @@ bug-reports:    https://github.com/mgsloan/explain-instance/issues
 maintainer:     Michael Sloan <mgsloan@gmail.com>
 license:        MIT
 build-type:     Simple
-cabal-version:  >= 1.10
 
 source-repository head
   type: git
@@ -21,7 +24,7 @@ library
       src
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
   build-depends:
-      base >=4.7 && < 5
+      base >=4.7 && <5
     , containers
     , lens
     , persistent
@@ -30,6 +33,8 @@ library
     , th-reify-many
   exposed-modules:
       ExplainInstance
+  other-modules:
+      Paths_explain_instance
   default-language: Haskell2010
 
 test-suite explain-instance-test
@@ -39,7 +44,7 @@ test-suite explain-instance-test
       test
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
   build-depends:
-      base >=4.7 && < 5
+      base >=4.7 && <5
     , containers
     , lens
     , persistent
@@ -57,4 +62,5 @@ test-suite explain-instance-test
       Test7
       Test8
       Test9
+      Paths_explain_instance
   default-language: Haskell2010
