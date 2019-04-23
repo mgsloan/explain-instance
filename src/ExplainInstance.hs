@@ -6,8 +6,11 @@
 
 module ExplainInstance where
 
+#if !(MIN_VERSION_template_haskell(2,10,0))
 import           Control.Applicative ((<$>), (<*>))
-import           Control.Monad (filterM)
+#else
+import           Control.Applicative ((<$>))
+#endif
 import           Data.Char (isLower)
 import           Data.Function (on)
 import           Data.Generics
@@ -17,7 +20,6 @@ import           Data.Maybe
 import           Data.Ord (comparing)
 import           Language.Haskell.TH
 import           Language.Haskell.TH.ReifyMany (reifyMany)
-import           Language.Haskell.TH.Syntax (addTopDecls)
 
 -- TODO:
 --
@@ -72,9 +74,9 @@ data Inst = Inst
 displayInst :: Inst -> String
 displayInst = go 0
   where
-    go i (Inst decl vars cxt) =
+    go i (Inst decl vars ctx) =
         addIndent i (decl ++ displayVars vars) ++
-        concatMap (("\n" ++) . go (i + 2)) cxt
+        concatMap (("\n" ++) . go (i + 2)) ctx
     displayVars [] = ""
     displayVars (var0 : vars) =
         "\n  with " ++ displayVar var0 ++
@@ -97,10 +99,10 @@ instanceResolvers addErrorInstance initial = do
     -- Recursively enumerate all of the top level declarations which
     -- need to be copied / renamed.
     recurse :: (Name, Info) -> Q (Bool, [Name])
-    recurse (name, info) = do
+    recurse (_, info) = do
         let (shouldEmit, names) = case info of
-                ClassI (ClassD cxt _name tvs _fds decs) insts ->
-                    (True, allNames (cxt, filter isFamilyDec decs) ++
+                ClassI (ClassD ctx _name tvs _fds decs) insts ->
+                    (True, allNames (ctx, filter isFamilyDec decs) ++
                            concatMap tvKindNames tvs ++
                            concatMap instNames insts)
                 TyConI (TySynD _name tvs ty) ->
@@ -108,17 +110,17 @@ instanceResolvers addErrorInstance initial = do
                 -- Only need to clone data declarations when they have
                 -- datatype contexts.
 #if MIN_VERSION_template_haskell(2,11,0)
-                TyConI (DataD cxt _name _tvs _kind _cons _deriving) ->
+                TyConI (DataD ctx _name _tvs _kind _cons _deriving) ->
 #else
-                TyConI (DataD cxt _name _tvs _cons _deriving) ->
+                TyConI (DataD ctx _name _tvs _cons _deriving) ->
 #endif
-                    (not (null cxt), allNames cxt)
+                    (not (null ctx), allNames ctx)
 #if MIN_VERSION_template_haskell(2,11,0)
-                TyConI (NewtypeD cxt _name _tvs _kind _con _deriving) ->
+                TyConI (NewtypeD ctx _name _tvs _kind _con _deriving) ->
 #else
-                TyConI (NewtypeD cxt _name _tvs _con _deriving) ->
+                TyConI (NewtypeD ctx _name _tvs _con _deriving) ->
 #endif
-                    (not (null cxt), allNames cxt)
+                    (not (null ctx), allNames ctx)
             -- We might encounter this due to DataKinds.
 #if MIN_VERSION_template_haskell(2,11,0)
                 DataConI _name _ty typeName ->
@@ -132,11 +134,11 @@ instanceResolvers addErrorInstance initial = do
         return (shouldEmit, filteredNames)
     instNames :: Dec -> [Name]
 #if MIN_VERSION_template_haskell(2,11,0)
-    instNames (InstanceD _ cxt ty decs) =
+    instNames (InstanceD _ ctx ty decs) =
 #else
-    instNames (InstanceD cxt ty decs) =
+    instNames (InstanceD ctx ty decs) =
 #endif
-        allNames cxt ++ allNames ty ++ allNames (filter isFamilyDec decs)
+        allNames ctx ++ allNames ty ++ allNames (filter isFamilyDec decs)
     instNames _ = []
     infoToDecs :: Info -> [Dec]
     -- TODO: check fundeps?
@@ -182,30 +184,30 @@ instanceResolvers addErrorInstance initial = do
     -- Modify a class or instance to instead just have a single
     -- "resolver*" function.
     resolver :: M.Map Name Name -> Dec -> Q Dec
-    resolver methodMap (ClassD cxt' name tvs fds decs) = do
+    resolver methodMap (ClassD ctx' name tvs fds decs) = do
         let method = lookupMethod methodMap name
             ty = funT $
                 map (AppT (ConT ''Proxy) . VarT . tvName) tvs ++
                 [ConT ''Inst]
-        cxt <- mapM trimConstraint cxt'
-        return $ ClassD cxt name tvs fds $
+        ctx <- mapM trimConstraint ctx'
+        return $ ClassD ctx name tvs fds $
             filter isFamilyDec decs ++
             [SigD method ty]
 #if MIN_VERSION_template_haskell(2,11,0)
-    resolver methodMap (InstanceD overlap cxt' ty' decs) = do
+    resolver methodMap (InstanceD overlap ctx' instTy' decs) = do
 #else
-    resolver methodMap (InstanceD cxt' ty' decs) = do
+    resolver methodMap (InstanceD ctx' instTy' decs) = do
 #endif
-        cxt <- mapM trimConstraint cxt'
-        ty <- trimInstanceType ty'
-        let substs = varTSubsts (cxt, ty)
+        ctx <- mapM trimConstraint ctx'
+        instTy <- trimInstanceType instTy'
+        let substs = varTSubsts (ctx, instTy)
             cleanTyVars = applySubstMap (M.fromList substs)
 #if MIN_VERSION_template_haskell(2,11,0)
-        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD overlap cxt ty []
+        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD overlap ctx instTy []
 #else
-        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cxt ty []
+        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD ctx instTy []
 #endif
-        let (ConT clazzName : tvs) = unAppsT ty
+        let (ConT clazzName : tvs) = unAppsT instTy
             method = lookupMethod methodMap clazzName
             msg = case addErrorInstance of
                 True | decs == errorInstanceDecs -> "ERROR " ++ pprint cleanedHead
@@ -218,24 +220,25 @@ instanceResolvers addErrorInstance initial = do
                     , AppE (VarE 'typeRep) (proxyE (VarT ty))
                     ]
 #if MIN_VERSION_template_haskell(2,10,0)
-                , ListE $ flip mapMaybe cxt $ \cxtTy -> case unAppsT cxtTy of
+                , ListE $ flip mapMaybe ctx $ \ctxTy -> case unAppsT ctxTy of
                     EqualityT : _ -> Nothing
                     ConT n : tys -> Just (invokeResolve methodMap n tys)
+                    _ -> Nothing
                 ]
             -- Need extra typeable constraints in order to use typeRep.
-            extraCxt = map (\(n, _) -> appsT [ConT ''Typeable, VarT n]) substs
+            extraCtx = map (\(n, _) -> appsT [ConT ''Typeable, VarT n]) substs
 #else
-                , ListE $ flip mapMaybe cxt $ \case
+                , ListE $ flip mapMaybe ctx $ \case
                     EqualP {} -> Nothing
                     ClassP n tys -> Just (invokeResolve methodMap n tys)
                 ]
             -- Need extra typeable constraints in order to use typeRep.
-            extraCxt = map (ClassP ''Typeable . (: []) . VarT . fst) substs
+            extraCtx = map (ClassP ''Typeable . (: []) . VarT . fst) substs
 #endif
 #if MIN_VERSION_template_haskell(2,11,0)
-        return $ InstanceD overlap (cxt ++ extraCxt) ty $
+        return $ InstanceD overlap (ctx ++ extraCtx) instTy $
 #else
-        return $ InstanceD (cxt ++ extraCxt) ty $
+        return $ InstanceD (ctx ++ extraCtx) instTy $
 #endif
             filter isFamilyDec decs ++
             [FunD method [Clause (map (\_ -> WildP) tvs) (NormalB expr) []]]
@@ -261,9 +264,9 @@ tvName :: TyVarBndr -> Name
 tvName (KindedTV name _kind) = name
 tvName (PlainTV name) = name
 
+isFamilyDec :: Dec -> Bool
 #if MIN_VERSION_template_haskell(2,11,0)
 isFamilyDec OpenTypeFamilyD {} = True
-isFamilyDec ClosedTypeFamilyD {} = True
 #else
 isFamilyDec FamilyD {} = True
 #endif
@@ -296,6 +299,7 @@ trimInstanceType (unAppsT -> (ConT n : tys)) = do
     runIO $ print ("trimInstanceType", n)
     ClassI (ClassD _ _ tvs _ _) _ <- reify n
     return $ appsT (ConT n : (drop (length tys - length tvs) tys))
+trimInstanceType _ = fail "Expected instance type to start with a typeclass name"
 
 chooseUnusedName :: Bool -> String -> Q Name
 chooseUnusedName allowUnmodified name = do
@@ -305,7 +309,7 @@ chooseUnusedName allowUnmodified name = do
   where
     choices = map (name ++) $
         (if allowUnmodified then ("" : ) else id) $
-        "_" : map ('_':) (map show [1..])
+        "_" : map ('_':) (map show ([1..] :: [Int]))
     -- 'recover' is used to handle errors due to ambiguous identifier names.
     exists str = recover (return True) $ do
         mtype <- lookupTypeName str
@@ -313,6 +317,7 @@ chooseUnusedName allowUnmodified name = do
         return $ isJust mtype || isJust mvalue
 
 findM :: Monad m => (a -> m Bool) -> [a] -> m (Maybe a)
+findM _ [] = return Nothing
 findM f (x:xs) = do
     b <- f x
     if b
@@ -326,12 +331,14 @@ applySubstMap :: (Data a, Ord b, Typeable b) => M.Map b b -> a -> a
 applySubstMap m = applySubst (flip M.lookup m)
 
 funT :: [Type] -> Type
+funT [] = error "Invariant violated: funT invoked with empty list"
 funT [x] = x
 funT (x:xs) = AppT (AppT ArrowT x) (funT xs)
 
 appsT :: [Type] -> Type
 appsT = go . reverse
   where
+    go [] = error "Invariant violated: appsT invoked with empty list"
     go [x] = x
     go (x:xs) = AppT (go xs) x
 
@@ -339,11 +346,12 @@ unAppsT :: Type -> [Type]
 unAppsT ty = go ty []
   where
     go (AppT l r) = go l . (r :)
-    go ty = (ty :)
+    go t = (t :)
 
 appsE' :: [Exp] -> Exp
 appsE' = go . reverse
   where
+    go [] = error "Invariant violated: appsE' invoked with empty list"
     go [x] = x
     go (x:xs) = AppE (go xs) x
 
@@ -388,7 +396,7 @@ varTSubsts :: Data a => a -> [(Name, Name)]
 varTSubsts =
     concatMap munge . groupSortOn nameBase . sortNub . varTNames
   where
-    munge = zipWith (\s x -> (x, mkName (nameBase x ++ s))) ("" : map show [1..])
+    munge = zipWith (\s x -> (x, mkName (nameBase x ++ s))) ("" : map show ([1..] :: [Int]))
 
 varTNames :: Data a => a -> [Name]
 varTNames x = [n | VarT n <- listify (\_ -> True) x]
