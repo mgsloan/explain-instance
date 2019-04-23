@@ -21,7 +21,7 @@ import           Language.Haskell.TH.Syntax (addTopDecls)
 --
 -- * Show info about type families by using Typeable
 --
--- * Use a parser so that type vars can be provided.  Or, have a
+-- * Use a parser so that type vars can be provided. Or, have a
 -- wildcard datatype.
 --
 -- * Apply inverse renaming on output types (relevant to constraints
