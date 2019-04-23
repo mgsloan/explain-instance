@@ -23,4 +23,6 @@ tests:
   explain-instance-test:
     source-dirs:
       - test
+    dependencies:
+      - typed-process
     main: Spec.hs
