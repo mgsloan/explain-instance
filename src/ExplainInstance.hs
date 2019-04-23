@@ -8,6 +8,7 @@ module ExplainInstance where
 
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad (filterM)
+import           Data.Char (isLower)
 import           Data.Function (on)
 import           Data.Generics
 import           Data.List (groupBy, sortBy, sort, group, find)
@@ -96,37 +97,39 @@ instanceResolvers addErrorInstance initial = do
     -- Recursively enumerate all of the top level declarations which
     -- need to be copied / renamed.
     recurse :: (Name, Info) -> Q (Bool, [Name])
-    recurse (name, info) = return $ do
-        case info of
-            ClassI (ClassD cxt _name tvs _fds decs) insts ->
-                (True, allNames (cxt, filter isFamilyDec decs) ++
-                       concatMap tvKindNames tvs ++
-                       concatMap instNames insts)
-            TyConI (TySynD _name tvs ty) ->
-                (True, allNames ty ++ concatMap tvKindNames tvs)
-            -- Only need to clone data declarations when they have
-            -- datatype contexts.
+    recurse (name, info) = do
+        let (shouldEmit, names) = case info of
+                ClassI (ClassD cxt _name tvs _fds decs) insts ->
+                    (True, allNames (cxt, filter isFamilyDec decs) ++
+                           concatMap tvKindNames tvs ++
+                           concatMap instNames insts)
+                TyConI (TySynD _name tvs ty) ->
+                    (True, allNames ty ++ concatMap tvKindNames tvs)
+                -- Only need to clone data declarations when they have
+                -- datatype contexts.
 #if MIN_VERSION_template_haskell(2,11,0)
-            TyConI (DataD cxt _name _tvs _kind _cons _deriving) ->
+                TyConI (DataD cxt _name _tvs _kind _cons _deriving) ->
 #else
-            TyConI (DataD cxt _name _tvs _cons _deriving) ->
+                TyConI (DataD cxt _name _tvs _cons _deriving) ->
 #endif
-                (not (null cxt), allNames cxt)
+                    (not (null cxt), allNames cxt)
 #if MIN_VERSION_template_haskell(2,11,0)
-            TyConI (NewtypeD cxt _name _tvs _kind _con _deriving) ->
+                TyConI (NewtypeD cxt _name _tvs _kind _con _deriving) ->
 #else
-            TyConI (NewtypeD cxt _name _tvs _con _deriving) ->
+                TyConI (NewtypeD cxt _name _tvs _con _deriving) ->
 #endif
-                (not (null cxt), allNames cxt)
+                    (not (null cxt), allNames cxt)
             -- We might encounter this due to DataKinds.
 #if MIN_VERSION_template_haskell(2,11,0)
-            DataConI _name _ty typeName ->
+                DataConI _name _ty typeName ->
 #else
-            DataConI _name _ty typeName _fixity ->
+                DataConI _name _ty typeName _fixity ->
 #endif
-                (False, [typeName])
+                    (False, [typeName])
             -- FamilyI dec insts -> return (True, [])
-            _ -> (False, [])
+                _ -> (False, [])
+            filteredNames = filter (not . isLower . head . nameBase) names
+        return (shouldEmit, filteredNames)
     instNames :: Dec -> [Name]
 #if MIN_VERSION_template_haskell(2,11,0)
     instNames (InstanceD _ cxt ty decs) =
