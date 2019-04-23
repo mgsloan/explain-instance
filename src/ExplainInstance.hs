@@ -281,22 +281,35 @@ isFamilyDec _ = False
 #if !(MIN_VERSION_template_haskell(2,10,0))
 trimConstraint :: Pred -> Q Pred
 trimConstraint (ClassP n tys) = do
-    runIO $ print ("trimConstraint", n)
-    ClassI (ClassD _ _ tvs _ _) _ <- reify n
-    return $ ClassP n (drop (length tys - length tvs) tys)
+    info <- reify n
+    case info of
+        ClassI (ClassD _ _ tvs _ _) _ ->
+            return $ ClassP n (drop (length tys - length tvs) tys)
+        _ -> fail $ unwords
+            [ "Expected to reify a class but for"
+            , pprint n
+            , "instead got\n"
+            , pprint info
+            ]
 trimConstraint x = return x
 #else
 trimConstraint :: Type -> Q Type
 trimConstraint (unAppsT -> (ConT n : tys)) = do
-    runIO $ print ("trimConstraint", n)
-    ClassI (ClassD _ _ tvs _ _) _ <- reify n
-    return $ appsT (ConT n : drop (length tys - length tvs) tys)
+    info <- reify n
+    case info of
+        ClassI (ClassD _ _ tvs _ _) _ ->
+            return $ appsT (ConT n : drop (length tys - length tvs) tys)
+        _ -> fail $ unwords
+            [ "Expected to reify a class but for"
+            , pprint n
+            , "instead got\n"
+            , pprint info
+            ]
 trimConstraint x = return x
 #endif
 
 trimInstanceType :: Type -> Q Type
 trimInstanceType (unAppsT -> (ConT n : tys)) = do
-    runIO $ print ("trimInstanceType", n)
     ClassI (ClassD _ _ tvs _ _) _ <- reify n
     return $ appsT (ConT n : (drop (length tys - length tvs) tys))
 trimInstanceType _ = fail "Expected instance type to start with a typeclass name"
