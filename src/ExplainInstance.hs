@@ -85,12 +85,12 @@ instanceResolvers :: Bool -> [Name] -> Q ([Dec], M.Map Name Name, M.Map Name Nam
 instanceResolvers addErrorInstance initial = do
     infos <- reifyMany recurse initial
     methodMap <- M.fromList <$> sequence
-        [ (n, ) <$> chooseUnusedName True ("resolve" ++ nameBase n)
+        [ (n, ) <$> chooseUnusedName True ("resolve" ++ alphaName n)
         | (n, ClassI {}) <- infos
         ]
     let names = map fst infos ++ concatMap (map conName . infoCons . snd) infos
     renameMap <- M.fromList <$>
-        mapM (\n -> (n, ) <$> chooseUnusedName False (nameBase n)) names
+        mapM (\n -> (n, ) <$> chooseUnusedName False (alphaName n)) names
     decs <- mapM (resolver methodMap) (concatMap (infoToDecs . snd) infos)
     return (map (applySubst (flip M.lookup renameMap)) decs, methodMap, renameMap)
   where
@@ -417,3 +417,8 @@ sortNub = map head . group . sort
 
 addIndent :: Int -> String -> String
 addIndent cnt = unlines . map (replicate cnt ' ' ++) . lines
+
+alphaName :: Name -> String
+alphaName n
+    | nameBase n == "~" = "Tilde"
+    | otherwise = nameBase n
