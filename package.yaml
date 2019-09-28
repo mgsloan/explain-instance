@@ -10,6 +10,7 @@ ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-
 dependencies:
   - base >=4.7 && < 5
   - containers
+  - directory
   - lens
   - persistent
   - syb

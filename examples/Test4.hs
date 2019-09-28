@@ -2,9 +2,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | Note: this is currently expected to not work.  Would need special
+-- logic for handling constraint kind type synonyms.
 module Test4 where
-
-{- FIXME: Currently broken test of constraint kinds
 
 import ExplainInstance
 
@@ -15,9 +15,4 @@ class Bar a where
 instance Foo Int
 instance OldNum a => Bar (Maybe a) where
 
--- Looks like this isn't fixed / didn't make it in:
--- https://ghc.haskell.org/trac/ghc/ticket/7021
-
 $(explainInstance [t| Bar (Maybe Int) |])
-
--}

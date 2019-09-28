@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 49b077ed0f2f0143226841f673fd673011fd74b4149f2619309152fa3ddb4718
+-- hash: e50c7295c2c7c667d8fa1afc8eba86ce9188f123d982fe420d5337ee62691825
 
 name:           explain-instance
 version:        0.1.0
@@ -26,6 +26,7 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , directory
     , lens
     , persistent
     , syb
@@ -46,6 +47,7 @@ test-suite explain-instance-test
   build-depends:
       base >=4.7 && <5
     , containers
+    , directory
     , lens
     , persistent
     , syb

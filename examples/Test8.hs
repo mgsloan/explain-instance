@@ -10,8 +10,6 @@
 -- Test of datatype contexts
 module Test8 where
 
-{- FIXME: Broken
-
 import ExplainInstance
 
 data Num a => A a = A a
@@ -20,5 +18,3 @@ instance Functor A where
     fmap = undefined
 
 explainInstance [t| Functor A |]
-
--}

@@ -12,6 +12,7 @@ import           Control.Applicative ((<$>), (<*>))
 import           Control.Applicative ((<$>))
 #endif
 import           Data.Char (isLower)
+import           Data.Coerce
 import           Data.Function (on)
 import           Data.Generics
 import           Data.List (groupBy, sortBy, sort, group, find)
@@ -90,7 +91,11 @@ instanceResolvers addErrorInstance initial = do
         [ (n, ) <$> chooseUnusedName True ("resolve" ++ alphaName n)
         | (n, ClassI {}) <- infos
         ]
-    let names = map fst infos ++ concatMap (map conName . infoCons . snd) infos
+    let names = concat
+          [ map fst infos
+          , concatMap (map conName . infoCons . snd) infos
+          , mapMaybe familyDecName $ concatMap (classDecs . snd) infos
+          ]
     renameMap <- M.fromList <$>
         mapM (\n -> (n, ) <$> chooseUnusedName False (alphaName n)) names
     decs <- mapM (resolver methodMap) (concatMap (infoToDecs . snd) infos)
@@ -101,10 +106,12 @@ instanceResolvers addErrorInstance initial = do
     recurse :: (Name, Info) -> Q (Bool, [Name])
     recurse (_, info) = do
         let (shouldEmit, names) = case info of
-                ClassI (ClassD ctx _name tvs _fds decs) insts ->
-                    (True, allNames (ctx, filter isFamilyDec decs) ++
+                ClassI (ClassD ctx name tvs _fds decs) insts ->
+                    ( not (isSpecialBuiltinClass name)
+                    , allNames (ctx, filter isFamilyDec decs) ++
                            concatMap tvKindNames tvs ++
-                           concatMap instNames insts)
+                           concatMap instNames insts
+                    )
                 TyConI (TySynD _name tvs ty) ->
                     (True, allNames ty ++ concatMap tvKindNames tvs)
                 -- Only need to clone data declarations when they have
@@ -167,6 +174,7 @@ instanceResolvers addErrorInstance initial = do
             all isTyVar tys
         isDefaultCase _ = False
         isTyVar (VarT _) = True
+        isTyVar (SigT (VarT _) _) = True
         isTyVar _ = False
     infoToDecs (ClassI _ _) = error "impossible: ClassI which doesn't contain ClassD"
     infoToDecs (TyConI dec) = [dec]
@@ -182,7 +190,7 @@ instanceResolvers addErrorInstance initial = do
     infoToDecs TyVarI {} = []
     errorInstanceDecs = [FunD (mkName "x") []]
     -- Modify a class or instance to instead just have a single
-    -- "resolver*" function.
+    -- "resolve*" function.
     resolver :: M.Map Name Name -> Dec -> Q Dec
     resolver methodMap (ClassD ctx' name tvs fds decs) = do
         let method = lookupMethod methodMap name
@@ -222,7 +230,8 @@ instanceResolvers addErrorInstance initial = do
 #if MIN_VERSION_template_haskell(2,10,0)
                 , ListE $ flip mapMaybe ctx $ \ctxTy -> case unAppsT ctxTy of
                     EqualityT : _ -> Nothing
-                    ConT n : tys -> Just (invokeResolve methodMap n tys)
+                    ConT n : tys
+                      | not (isSpecialBuiltinClass n) -> Just (invokeResolve methodMap n tys)
                     _ -> Nothing
                 ]
             -- Need extra typeable constraints in order to use typeRep.
@@ -265,26 +274,39 @@ tvName (KindedTV name _kind) = name
 tvName (PlainTV name) = name
 
 isFamilyDec :: Dec -> Bool
+isFamilyDec = isJust . familyDecName
+
+familyDecName :: Dec -> Maybe Name
 #if MIN_VERSION_template_haskell(2,11,0)
-isFamilyDec OpenTypeFamilyD {} = True
+familyDecName (OpenTypeFamilyD (TypeFamilyHead name _ _ _)) = Just name
 #else
-isFamilyDec FamilyD {} = True
+-- TODO Not sure how many args this takes, fix compilation.
+familyDecName (FamilyD name) = Just name
 #endif
-isFamilyDec DataInstD {} = True
-isFamilyDec NewtypeInstD {} = True
-isFamilyDec TySynInstD {} = True
-isFamilyDec ClosedTypeFamilyD {} = True
-isFamilyDec _ = False
+familyDecName (DataInstD _ name _ _ _ _) = Just name
+familyDecName (NewtypeInstD _ name _ _ _ _) = Just name
+familyDecName (TySynInstD name _) = Just name
+familyDecName (ClosedTypeFamilyD (TypeFamilyHead name _ _ _) _) = Just name
+familyDecName _ = Nothing
+
+classDecs :: Info -> [Dec]
+classDecs (ClassI (ClassD _ _ _ _ decs) _) = decs
+classDecs _ = []
+
+isSpecialBuiltinClass :: Name -> Bool
+isSpecialBuiltinClass name = name `elem` [''Coercible, ''Typeable]
 
 -- Work around a TH bug where PolyKinded constraints get too many
 -- arguments.
 #if !(MIN_VERSION_template_haskell(2,10,0))
 trimConstraint :: Pred -> Q Pred
-trimConstraint (ClassP n tys) = do
+trimConstraint p@(ClassP n tys) = do
     info <- reify n
     case info of
         ClassI (ClassD _ _ tvs _ _) _ ->
             return $ ClassP n (drop (length tys - length tvs) tys)
+        TyConI {} ->
+            return p
         _ -> fail $ unwords
             [ "Expected to reify a class but for"
             , pprint n
@@ -294,11 +316,13 @@ trimConstraint (ClassP n tys) = do
 trimConstraint x = return x
 #else
 trimConstraint :: Type -> Q Type
-trimConstraint (unAppsT -> (ConT n : tys)) = do
+trimConstraint t@(unAppsT -> (ConT n : tys)) = do
     info <- reify n
     case info of
         ClassI (ClassD _ _ tvs _ _) _ ->
             return $ appsT (ConT n : drop (length tys - length tvs) tys)
+        TyConI {} ->
+            return t
         _ -> fail $ unwords
             [ "Expected to reify a class but for"
             , pprint n
@@ -442,4 +466,5 @@ addIndent cnt = unlines . map (replicate cnt ' ' ++) . lines
 alphaName :: Name -> String
 alphaName n
     | nameBase n == "~" = "Tilde"
+    | nameBase n == "*" = "Star"
     | otherwise = nameBase n
