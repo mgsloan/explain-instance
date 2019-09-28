@@ -15,6 +15,6 @@ import Data.Typeable
 import ExplainInstance
 import Text.Printf
 
-data A = A deriving (Typeable)
+data A = A
 
 $(explainInstanceError [t| PrintfType (A -> Int -> Maybe String) |])

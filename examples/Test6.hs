@@ -22,7 +22,4 @@ import Data.Functor.Const
 import Data.Functor.Identity
 import Data.Proxy
 
-deriving instance Typeable Key
-deriving instance Typeable BackendKey
-
 $(explainInstance [t| PersistQuery SqlBackend |])
