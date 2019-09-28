@@ -19,8 +19,12 @@ import           Data.List (groupBy, sortBy, sort, group, find)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Ord (comparing)
+import           Debug.Trace
 import           Language.Haskell.TH
 import           Language.Haskell.TH.ReifyMany (reifyMany)
+
+debug :: Ppr a => a -> a
+debug x = x -- trace (pprint x ++ "\n") x
 
 -- TODO:
 --
@@ -105,7 +109,7 @@ instanceResolvers addErrorInstance initial = do
     -- need to be copied / renamed.
     recurse :: (Name, Info) -> Q (Bool, [Name])
     recurse (_, info) = do
-        let (shouldEmit, names) = case info of
+        let (shouldEmit, names) = case debug info of
                 ClassI (ClassD ctx name tvs _fds decs) insts ->
                     ( not (isSpecialBuiltinClass name)
                     , allNames (ctx, filter isFamilyDec decs) ++
