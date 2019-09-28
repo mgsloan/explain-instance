@@ -16,6 +16,7 @@ dependencies:
   - syb
   - template-haskell
   - th-reify-many
+  - th-expand-syns
 
 library:
   source-dirs: src

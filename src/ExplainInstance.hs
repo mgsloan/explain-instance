@@ -22,6 +22,7 @@ import           Data.Ord (comparing)
 import           Debug.Trace
 import           Language.Haskell.TH
 import           Language.Haskell.TH.ReifyMany (reifyMany)
+import           Language.Haskell.TH.ExpandSyns
 
 debug :: Ppr a => a -> a
 debug x = x -- trace (pprint x ++ "\n") x
@@ -55,7 +56,7 @@ explainInstanceError = explainInstance' True
 
 explainInstance' :: Bool -> Q Type -> Q [Dec]
 explainInstance' addErrorInstance qty = do
-    ty <- qty
+    ty <- expandSyns =<< qty
     case unAppsT ty of
         (ConT clazz : tys) -> do
             (decs, methodMap, renameMap) <- instanceResolvers addErrorInstance [clazz]

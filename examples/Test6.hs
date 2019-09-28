@@ -11,16 +11,18 @@
 
 module Test6 where
 
-{- FIXME: Currently broken
-
 import Data.Typeable
 import Database.Persist
 import Database.Persist.Sql
 import ExplainInstance
 
+-- Imports needed to make instances visible to GHC reification
+import GHC.Unicode
+import Data.Functor.Const
+import Data.Functor.Identity
+import Data.Proxy
+
 deriving instance Typeable Key
 deriving instance Typeable BackendKey
 
 $(explainInstance [t| PersistQuery SqlBackend |])
-
--}

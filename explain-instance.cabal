@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e50c7295c2c7c667d8fa1afc8eba86ce9188f123d982fe420d5337ee62691825
+-- hash: d401a88886e2e999b9fff1431d187bfba2c76a21901cb58269ca9aa1d698a691
 
 name:           explain-instance
 version:        0.1.0
@@ -31,6 +31,7 @@ library
     , persistent
     , syb
     , template-haskell
+    , th-expand-syns
     , th-reify-many
   exposed-modules:
       ExplainInstance
@@ -52,6 +53,7 @@ test-suite explain-instance-test
     , persistent
     , syb
     , template-haskell
+    , th-expand-syns
     , th-reify-many
     , typed-process
   other-modules:
