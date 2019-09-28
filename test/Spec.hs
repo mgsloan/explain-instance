@@ -11,7 +11,7 @@ main = do
   expectExampleSuccess "Test3"
   expectExampleFailure "Test4"
   expectExampleSuccess "Test5"
-  expectExampleFailure "Test6"
+  expectExampleSuccess "Test6"
   expectExampleSuccess "Test7"
   expectExampleSuccess "Test8"
   expectExampleSuccess "Test9"
@@ -20,7 +20,7 @@ expectExampleSuccess :: String -> IO ()
 expectExampleSuccess name =
   expectProcessSuccess
     "runghc"
-    ["-ddump-splices", "examples/" ++ name ++ ".hs"]
+    ["examples/" ++ name ++ ".hs"]
     ("examples-output/" ++ name ++ ".stdout")
     ("examples-output/" ++ name ++ ".stderr")
 
