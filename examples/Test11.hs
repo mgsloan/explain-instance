@@ -16,15 +16,15 @@ module Test7 where
 import Data.Typeable
 import ExplainInstance
 
-import Control.Lens
-import Control.Lens.Internal.Context
+import Data.Conduit
 
 -- Imports needed to make instances visible to GHC reification
+import Data.Functor.Const
 import Data.Functor.Identity
-import Control.Comonad
-import Data.Complex
-import Data.Ord
-import Data.Either
-import Data.Vector.Fusion.Util
+import Foreign.C.Types
+import GHC.Int
+import GHC.Word
+import Control.Monad.IO.Class
+import Control.Monad.Reader
 
-$(explainInstance [t| Contravariant (PretextT (->) (Const Int) String String) |])
+$(explainInstance [t| MonadIO (ConduitT String Int (ReaderT Int IO)) |])
