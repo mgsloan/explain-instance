@@ -78,5 +78,7 @@ runHelper cmd args stdoutFile stderrFile = do
 
 deleteIfEmpty :: String -> IO ()
 deleteIfEmpty path = do
-  contents <- readFile path
-  when (null (filter (not . null) (lines contents))) $ removeFile path
+  exists <- doesFileExist path
+  when exists $ do
+    contents <- readFile path
+    when (null (filter (not . null) (lines contents))) $ removeFile path
