@@ -145,7 +145,7 @@ instanceResolvers addErrorInstance initial = do
             False -> dec : insts
             True ->
                 let errInst = InstanceD
-                        Nothing
+                        (Just Overlappable)
                         []
                         (appsT $ ConT name : map (VarT . tvName) tvs)
                         errorInstanceDecs

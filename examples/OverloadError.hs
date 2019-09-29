@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -10,7 +9,7 @@ import Data.Typeable
 import ExplainInstance
 
 class Foo a
-instance Foo a
-instance Foo Int
+instance {-# OVERLAPPABLE #-} Foo a
+instance {-# OVERLAPPING #-} Foo Int
 
 $(explainInstanceError [t| Foo Int |])
