@@ -10,9 +10,6 @@ ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-
 dependencies:
   - base >=4.7 && < 5
   - containers
-  - directory
-  - lens
-  - persistent
   - syb
   - template-haskell >= 2.11
   - th-reify-many
@@ -26,5 +23,8 @@ tests:
     source-dirs:
       - test
     dependencies:
+      - directory
+      - filepath
+      - lens
       - typed-process
     main: Spec.hs

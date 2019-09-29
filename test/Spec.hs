@@ -3,34 +3,34 @@ import System.Directory
 import System.Exit
 import System.IO
 import System.Process.Typed
+import System.FilePath
 
 main :: IO ()
 main = do
-  expectExampleSuccess "Test"
-  expectExampleSuccess "Test2"
-  expectExampleSuccess "Test3"
-  expectExampleFailure "Test4"
-  expectExampleSuccess "Test5"
-  expectExampleSuccess "Test6"
-  expectExampleSuccess "Test7"
-  expectExampleSuccess "Test8"
-  expectExampleSuccess "Test9"
+  examples <- listDirectory "examples"
+  forM_ examples $ \example ->
+    when (takeExtensions example == ".hs") $
+      expectExampleSuccess ("examples" </> dropExtensions example)
+  failingExamples <- listDirectory "failing-examples"
+  forM_ failingExamples $ \example ->
+    when (takeExtensions example == ".hs") $
+      expectExampleFailure ("failing-examples" </> dropExtensions example)
 
 expectExampleSuccess :: String -> IO ()
 expectExampleSuccess name =
   expectProcessSuccess
     "runghc"
-    ["examples/" ++ name ++ ".hs"]
-    ("examples/" ++ name ++ ".stdout")
-    ("examples/" ++ name ++ ".stderr")
+    [name ++ ".hs"]
+    (name ++ ".stdout")
+    (name ++ ".stderr")
 
 expectExampleFailure :: String -> IO ()
 expectExampleFailure name =
   expectProcessFailure
     "runghc"
-    ["examples/" ++ name ++ ".hs"]
-    ("examples/" ++ name ++ ".stdout")
-    ("examples/" ++ name ++ ".stderr")
+    [name ++ ".hs"]
+    (name ++ ".stdout")
+    (name ++ ".stderr")
 
 expectProcessSuccess :: String -> [String] -> String -> String -> IO ()
 expectProcessSuccess cmd args stdoutFile stderrFile = do

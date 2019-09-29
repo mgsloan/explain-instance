@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4a7b73439356dca859ccba035808834cbe2852905453e21866db45353811ef0b
+-- hash: d13ffb68f7a8fffe0a9114d02c50d142a3a9713e080934953bdfe21914143bc3
 
 name:           explain-instance
 version:        0.1.0
@@ -26,9 +26,6 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
-    , directory
-    , lens
-    , persistent
     , syb
     , template-haskell >=2.11
     , th-expand-syns
@@ -49,8 +46,8 @@ test-suite explain-instance-test
       base >=4.7 && <5
     , containers
     , directory
+    , filepath
     , lens
-    , persistent
     , syb
     , template-haskell >=2.11
     , th-expand-syns
