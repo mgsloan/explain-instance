@@ -1,11 +1,9 @@
-import System.Directory (createDirectoryIfMissing)
-import System.IO
 import System.Exit
+import System.IO
 import System.Process.Typed
 
 main :: IO ()
 main = do
-  createDirectoryIfMissing True "examples-output/"
   expectExampleSuccess "Test"
   expectExampleSuccess "Test2"
   expectExampleSuccess "Test3"
@@ -21,16 +19,16 @@ expectExampleSuccess name =
   expectProcessSuccess
     "runghc"
     ["examples/" ++ name ++ ".hs"]
-    ("examples-output/" ++ name ++ ".stdout")
-    ("examples-output/" ++ name ++ ".stderr")
+    ("examples/" ++ name ++ ".stdout")
+    ("examples/" ++ name ++ ".stderr")
 
 expectExampleFailure :: String -> IO ()
 expectExampleFailure name =
   expectProcessFailure
     "runghc"
     ["examples/" ++ name ++ ".hs"]
-    ("examples-output/" ++ name ++ ".stdout")
-    ("examples-output/" ++ name ++ ".stderr")
+    ("examples/" ++ name ++ ".stdout")
+    ("examples/" ++ name ++ ".stderr")
 
 expectProcessSuccess :: String -> [String] -> String -> String -> IO ()
 expectProcessSuccess cmd args stdoutFile stderrFile = do
