@@ -1,3 +1,5 @@
+import Control.Monad
+import System.Directory
 import System.Exit
 import System.IO
 import System.Process.Typed
@@ -63,9 +65,18 @@ failAndShowOutput stdoutFile stderrFile msg = do
 runHelper :: String -> [String] -> FilePath -> FilePath -> IO ExitCode
 runHelper cmd args stdoutFile stderrFile = do
   putStrLn $ unwords ("Running" : cmd : args)
-  withFile stdoutFile WriteMode $ \stdoutHandle ->
-    withFile stderrFile WriteMode $ \stderrHandle ->
-      runProcess $
-        setStdout (useHandleOpen stdoutHandle) $
-        setStderr (useHandleOpen stderrHandle) $
-        proc cmd args
+  exitCode <-
+    withFile stdoutFile WriteMode $ \stdoutHandle ->
+      withFile stderrFile WriteMode $ \stderrHandle ->
+        runProcess $
+          setStdout (useHandleOpen stdoutHandle) $
+          setStderr (useHandleOpen stderrHandle) $
+          proc cmd args
+  deleteIfEmpty stdoutFile
+  deleteIfEmpty stderrFile
+  return exitCode
+
+deleteIfEmpty :: String -> IO ()
+deleteIfEmpty path = do
+  contents <- readFile path
+  when (null (filter (not . null) (lines contents))) $ removeFile path
