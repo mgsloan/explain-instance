@@ -50,8 +50,8 @@ expectProcessFailure cmd args stdoutFile stderrFile = do
 
 failAndShowOutput :: FilePath -> FilePath -> String -> IO ()
 failAndShowOutput stdoutFile stderrFile msg = do
-  out <- readFile stdoutFile
-  err <- readFile stderrFile
+  out <- readFileIfExists stdoutFile
+  err <- readFileIfExists stderrFile
   fail $ unlines
     [ msg
     , ""
@@ -75,6 +75,11 @@ runHelper cmd args stdoutFile stderrFile = do
   deleteIfEmpty stdoutFile
   deleteIfEmpty stderrFile
   return exitCode
+
+readFileIfExists :: String -> IO String
+readFileIfExists path = do
+  exists <- doesFileExist path
+  if exists then readFile path else return ""
 
 deleteIfEmpty :: String -> IO ()
 deleteIfEmpty path = do
