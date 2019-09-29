@@ -14,7 +14,7 @@ dependencies:
   - lens
   - persistent
   - syb
-  - template-haskell
+  - template-haskell >= 2.11
   - th-reify-many
   - th-expand-syns
 
