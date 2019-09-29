@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
@@ -14,13 +15,19 @@ import           Data.List (groupBy, sortBy, sort, group, find)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Ord (comparing)
-import           Debug.Trace
 import           Language.Haskell.TH
 import           Language.Haskell.TH.ReifyMany (reifyMany)
 import           Language.Haskell.TH.ExpandSyns
 
+-- Switch to true to output everything that gets reified.
+#if false
+import Debug.Trace
 debug :: Ppr a => a -> a
-debug x = x -- trace (pprint x ++ "\n") x
+debug x = trace (pprint x ++ "\n") x
+#else
+debug :: a -> a
+debug = id
+#endif
 
 -- TODO:
 --
@@ -93,7 +100,7 @@ instanceResolvers addErrorInstance initial = do
         ]
     let names = concat
           [ map fst infos
-          , concatMap (map conName . infoCons . snd) infos
+          , concatMap (concatMap conNames . infoCons . snd) infos
           , mapMaybe familyDecName $ concatMap (classDecs . snd) infos
           ]
     renameMap <- M.fromList <$>
@@ -162,6 +169,9 @@ instanceResolvers addErrorInstance initial = do
     infoToDecs PrimTyConI {} = []
     infoToDecs DataConI {} = []
     infoToDecs TyVarI {} = []
+#if MIN_VERSION_template_haskell(2,12,0)
+    infoToDecs PatSynI {} = []
+#endif
     errorInstanceDecs = [FunD (mkName "x") []]
     -- Modify a class or instance to instead just have a single
     -- "resolve*" function.
@@ -181,8 +191,8 @@ instanceResolvers addErrorInstance initial = do
         let substs = varTSubsts (ctx, instTy)
             cleanTyVars = applySubstMap (M.fromList substs)
         cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD overlap ctx instTy []
-        let (ConT clazzName : tvs) = unAppsT instTy
-            method = lookupMethod methodMap clazzName
+        ConT clazzName : tvs <- return (unAppsT instTy)
+        let method = lookupMethod methodMap clazzName
             msg = case addErrorInstance of
                 True | decs == errorInstanceDecs -> "ERROR " ++ pprint cleanedHead
                 _ -> pprint cleanedHead
@@ -366,11 +376,13 @@ infoCons (TyConI (DataD _ _ _ _ cons _)) = cons
 infoCons (TyConI (NewtypeD _ _ _ _ con _)) = [con]
 infoCons _ = []
 
-conName :: Con -> Name
-conName (NormalC name _) = name
-conName (RecC name _) = name
-conName (InfixC _ name _) = name
-conName (ForallC _ _ con) = conName con
+conNames :: Con -> [Name]
+conNames (NormalC name _) = [name]
+conNames (RecC name _) = [name]
+conNames (InfixC _ name _) = [name]
+conNames (ForallC _ _ con) = conNames con
+conNames (GadtC names _ _) = names
+conNames (RecGadtC names _ _) = names
 
 groupSortOn :: Ord b => (a -> b) -> [a] -> [[a]]
 groupSortOn f = groupBy ((==) `on` f) . sortBy (comparing f)
