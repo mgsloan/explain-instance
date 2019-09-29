@@ -1,10 +1,9 @@
+-- Note: this is currently expected to not work.  Would need special
+-- logic for handling constraint kind type synonyms.
+
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-
--- | Note: this is currently expected to not work.  Would need special
--- logic for handling constraint kind type synonyms.
-module Test4 where
 
 import ExplainInstance
 

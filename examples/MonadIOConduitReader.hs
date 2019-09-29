@@ -11,8 +11,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Test7 where
-
 import Data.Typeable
 import ExplainInstance
 

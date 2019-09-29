@@ -2,8 +2,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE KindSignatures #-}
 
-module Test2 where
-
 import ExplainInstance
 
 class Foo a where

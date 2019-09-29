@@ -1,6 +1,8 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -9,17 +11,18 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Test6 where
-
 import Data.Typeable
-import Database.Persist
-import Database.Persist.Sql
 import ExplainInstance
 
--- Imports needed to make instances visible to GHC reification
-import GHC.Unicode
-import Data.Functor.Const
-import Data.Functor.Identity
-import Data.Proxy
+import Control.Lens
+import Control.Lens.Internal.Context
 
-$(explainInstance [t| PersistQuery SqlBackend |])
+-- Imports needed to make instances visible to GHC reification
+import Data.Functor.Identity
+import Control.Comonad
+import Data.Complex
+import Data.Ord
+import Data.Either
+import Data.Vector.Fusion.Util
+
+$(explainInstance [t| Contravariant (PretextT (->) (Const Int) String String) |])
