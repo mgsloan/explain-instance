@@ -1,0 +1,8 @@
+instance Ord a => Ord ([a])
+  with a ~ Maybe Int
+
+  instance Ord a => Ord (Maybe a)
+    with a ~ Int
+
+    instance Ord Int
+

@@ -1,0 +1,6 @@
+instance Semigroup a => Monoid (Maybe a)
+  with a ~ Int
+
+  ERROR instance {-# OVERLAPPABLE #-} Semigroup a
+    with a ~ Int
+

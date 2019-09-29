@@ -1,0 +1,12 @@
+instance (Profunctor p,
+          Contravariant g) => Contravariant (PretextT p g a b)
+  with a ~ [Char]
+       b ~ [Char]
+       g ~ Const * Int
+       p ~ (->) 'LiftedRep 'LiftedRep
+
+  instance Profunctor ((->) :: * -> * -> *)
+
+  instance Contravariant (Const a :: * -> *)
+    with a ~ Int
+

@@ -1,0 +1,17 @@
+instance (PrintfArg a, PrintfType r) => PrintfType (a -> r)
+  with a ~ Int
+       r ~ (Int -> [Char])
+
+  instance PrintfArg Int
+
+  instance (PrintfArg a, PrintfType r) => PrintfType (a -> r)
+    with a ~ Int
+         r ~ [Char]
+
+    instance PrintfArg Int
+
+    instance IsChar c => PrintfType ([c])
+      with c ~ Char
+
+      instance IsChar Char
+

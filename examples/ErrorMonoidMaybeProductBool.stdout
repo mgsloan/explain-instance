@@ -1,0 +1,9 @@
+instance Semigroup a => Monoid (Maybe a)
+  with a ~ Product Bool
+
+  instance Num a => Semigroup (Product a)
+    with a ~ Bool
+
+    ERROR instance {-# OVERLAPPABLE #-} Num a
+      with a ~ Bool
+

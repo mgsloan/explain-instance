@@ -1,0 +1,11 @@
+instance MonadIO m => MonadIO (ConduitT i o m)
+  with i ~ [Char]
+       m ~ ReaderT Int IO
+       o ~ Int
+
+  instance MonadIO m => MonadIO (ReaderT r m)
+    with m ~ IO
+         r ~ Int
+
+    instance MonadIO IO
+

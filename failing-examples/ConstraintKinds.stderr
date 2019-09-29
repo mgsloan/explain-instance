@@ -1,0 +1,10 @@
+
+failing-examples/ConstraintKinds.hs:1:1: error:
+    Exception when trying to run compile-time code:
+      Couldn't find resolve* method name for Main.OldNum
+CallStack (from HasCallStack):
+  error, called at src/ExplainInstance.hs:225:16 in explain-instance-0.1.0-HdocDQPk56jIzMMQ14Ylm1:ExplainInstance
+    Code: explainInstance [t| Bar (Maybe Int) |]
+  |
+1 | -- Note: this is currently expected to not work.  Would need special
+  | ^

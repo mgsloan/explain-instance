@@ -1,0 +1,5 @@
+instance Foo a => Bar (Maybe a)
+  with a ~ Int
+
+  instance Foo Int
+

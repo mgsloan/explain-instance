@@ -1,0 +1,16 @@
+instance (PrintfArg a, PrintfType r) => PrintfType (a -> r)
+  with a ~ A
+       r ~ (Int -> Maybe [Char])
+
+  ERROR instance {-# OVERLAPPABLE #-} PrintfArg a
+    with a ~ A
+
+  instance (PrintfArg a, PrintfType r) => PrintfType (a -> r)
+    with a ~ Int
+         r ~ Maybe [Char]
+
+    instance PrintfArg Int
+
+    ERROR instance {-# OVERLAPPABLE #-} PrintfType t
+      with t ~ Maybe [Char]
+
