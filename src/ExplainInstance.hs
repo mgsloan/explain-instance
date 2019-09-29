@@ -190,7 +190,10 @@ instanceResolvers addErrorInstance initial = do
         instTy <- trimInstanceType instTy'
         let substs = varTSubsts (ctx, instTy)
             cleanTyVars = applySubstMap (M.fromList substs)
-        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD overlap ctx instTy []
+            cleanedOverlap = case addErrorInstance of
+              True | decs == errorInstanceDecs -> Nothing
+              _ -> overlap
+        cleanedHead <- cleanTyCons $ cleanTyVars $ InstanceD cleanedOverlap ctx instTy []
         ConT clazzName : tvs <- return (unAppsT instTy)
         let method = lookupMethod methodMap clazzName
             msg = case addErrorInstance of
